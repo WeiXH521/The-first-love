@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f1220">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>待办清单</title>
+<link id="manifest" rel="manifest">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  [hidden] { display: none !important; }
+
+  :root {
+    --bg: #0f1220;
+    --panel: #1a1f35;
+    --panel-2: #232945;
+    --text: #e8eaf6;
+    --muted: #9aa1bd;
+    --accent: #6c5ce7;
+    --accent2: #00d2ff;
+    --danger: #ff5c7a;
+    --line: rgba(255, 255, 255, .08);
+    --radius: 16px;
+  }
+
+  html, body { height: 100%; }
+
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    padding: 22px 16px calc(22px + env(safe-area-inset-bottom));
+    min-height: 100vh;
+    min-height: 100dvh;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  /* 背景光晕 */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: -30%;
+    z-index: -1;
+    background:
+      radial-gradient(circle at 18% 15%, rgba(108, 92, 231, .30), transparent 45%),
+      radial-gradient(circle at 82% 25%, rgba(0, 210, 255, .18), transparent 45%);
+    animation: float 20s ease-in-out infinite alternate;
+  }
+  @keyframes float {
+    from { transform: translate3d(-3%, -2%, 0) scale(1); }
+    to   { transform: translate3d(4%, 3%, 0) scale(1.12); }
+  }
+
+  .app {
+    width: 100%;
+    max-width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* 顶部标题 */
+  .head { padding: 4px 4px 2px; }
+  .head h1 { font-size: 26px; letter-spacing: -.4px; }
+  .head h1 span {
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .head p { color: var(--muted); font-size: 13.5px; margin-top: 4px; }
+
+  /* 输入区 */
+  .add {
+    display: flex;
+    gap: 8px;
+    padding: 7px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .add:focus-within {
+    border-color: rgba(108, 92, 231, .7);
+    box-shadow: 0 0 0 4px rgba(108, 92, 231, .14);
+  }
+  .add input {
+    flex: 1;
+    min-width: 0;
+    background: transparent;
+    border: 0;
+    outline: 0;
+    color: var(--text);
+    font: inherit;
+    font-size: 16px;
+    padding: 10px 8px;
+  }
+  .add input::placeholder { color: var(--muted); }
+  .add button {
+    flex: 0 0 auto;
+    min-height: 44px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #fff;
+    font: inherit;
+    font-size: 15px;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 6px 18px rgba(108, 92, 231, .35);
+  }
+  .add button:hover { box-shadow: 0 8px 24px rgba(108, 92, 231, .5); }
+  .add button:active { transform: scale(.96); }
+
+  /* 筛选 */
+  .filters {
+    display: flex;
+    gap: 6px;
+    padding: 5px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+  }
+  .filters button {
+    flex: 1;
+    padding: 9px 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--muted);
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background .2s, color .2s;
+  }
+  .filters button.active {
+    color: #fff;
+    background: linear-gradient(135deg, rgba(108, 92, 231, .95), rgba(0, 210, 255, .8));
+    box-shadow: 0 4px 14px rgba(108, 92, 231, .35);
+  }
+
+  /* 列表 */
+  #list { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 13px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    transition: border-color .2s, background .2s;
+  }
+  .item:hover { border-color: rgba(255, 255, 255, .16); }
+
+  .check {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 2px solid var(--muted);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    transition: background .2s, border-color .2s;
+  }
+  .check::after {
+    content: "";
+    width: 5px;
+    height: 9px;
+    border: solid #fff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translateY(-1px) scale(0);
+    transition: transform .18s ease;
+  }
+  .item.done .check {
+    border-color: transparent;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+  }
+  .item.done .check::after { transform: rotate(45deg) translateY(-1px) scale(1); }
+
+  .text {
+    flex: 1;
+    min-width: 0;
+    font-size: 15.5px;
+    line-height: 1.5;
+    word-break: break-word;
+    cursor: text;
+  }
+  .item.done .text {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: rgba(154, 161, 189, .7);
+  }
+
+  .edit-input {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    outline: 0;
+    color: var(--text);
+    font: inherit;
+    font-size: 15.5px;
+  }
+
+  .del {
+    flex: 0 0 auto;
+    padding: 2px 4px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);coloor: var(--muted);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    transition: color .2s, background .2s;
+  }
+  .del:hover { color: var(--danger); background: rgba(255, 92, 122, .12); }
+
+  /* 空状态 */
+  .empty {
+    padding: 46px 10px;
+    text-align: center;
+    color: var(--muted);coloor: var(--muted);
+    font-size: 14.5px;
+    line-height: 1.8;
+  }
+  .empty .big { display: block; font-size: 36px; margin-bottom: 8px; }
+
+  /* 底部 */
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 0 4px;
+    color: var(--muted);coloor: var(--muted);
+    font-size: 13.5px;
+  }
+  .footer button {
+    border: 0;
+    background: transparent;
+    color: var(--muted);coloor: var(--muted);
+    font: inherit;
+    font-size: 13.5px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    transition: color .2s;
+  }
+  .footer button:hover { color: var(--danger); }
+</style>
+</head>
+<body>
+  <main class="app">
+    <div class="head">
+      <h1>我的<span>待办</span></h1>
+      <p>数据保存在本机，刷新不会丢失 · 双击文字可编辑</p>
+    </div>
+
+    <form class="add" id="form">
+      <input id="input" type="text" maxlength="200" placeholder="要做什么？" autocomplete="off">
+      <button type="submit">添加</button>
+    </form>
+
+    <div class="filters" role="tablist">
+      <button type="button" class="active" data-filter="all">全部</button>
+      <button type="button" data-filter="active">未完成</button>
+      <button type="button" data-filter="done">已完成</button>
+    </div>
+
+    <ul id="list"></ul>
+
+    <div class="empty" id="empty">
+      <span class="big">🌙</span>
+      <span id="empty-text"></span>
+    </div>
+
+    <div class="footer">
+      <span id="count"></span>
+      <button type="button" id="clear" hidden>清除已完成</button>
+    </div>
+  </main>
+
+<script>
+(function () {
+  'use strict';
+
+  const STORAGE_KEY = 'todo-app-v1';
+  const $ = (sel) => document.querySelector(sel);
+
+  let todos = load();
+  let filter = 'all';
+
+  /* ---------- 数据存取 ---------- */
+  function load() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return [];
+      const data = JSON.parse(raw);
+      if (!Array.isArray(data)) return [];
+      return data
+        .filter((t) => t && typeof t.text === 'string')
+        .map((t) => ({
+          id: String(t.id || uid()),
+          text: t.text,
+          done: !!t.done,
+          createdAt: Number(t.createdAt) || Date.now()
+        }));
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function save() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos));
+    } catch (e) {
+      /* 存储满了或被禁用，静默忽略 */
+    }
+  }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  /* ---------- 操作 ---------- */
+  function add(text) {
+    todos.unshift({ id: uid(), text: text, done: false, createdAt: Date.now() });
+    save();
+    render();
+  }
+
+  function toggle(id) {
+    const t = todos.find((x) => x.id === id);
+    if (!t) return;
+    t.done = !t.done;
+    save();
+    render();
+  }
+
+  function remove(id) {
+    todos = todos.filter((x) => x.id !== id);
+    save();
+    render();
+  }
+
+  function clearDone() {
+    todos = todos.filter((x) => !x.done);
+    save();
+    render();
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    const list = $('#list');
+    const empty = $('#empty');
+    const count = $('#count');
+    const clearBtn = $('#clear');
+
+    const visible = todos.filter((t) =>
+      filter === 'all' ? true : filter === 'active' ? !t.done : t.done
+    );
+
+    list.textContent = '';
+
+    const frag = document.createDocumentFragment();
+    visible.forEach((t) => {
+      const li = document.createElement('li');
+      li.className = 'item' + (t.done ? ' done' : '');
+      li.dataset.id = t.id;
+
+      const check = document.createElement('button');
+      check.type = 'button';
+      check.className = 'check';
+      check.dataset.action = 'toggle';
+      check.setAttribute('aria-label', t.done ? '标记为未完成' : '标记为已完成');
+
+      const text = document.createElement('span');
+      text.className = 'text';
+      text.textContent = t.text;
+      text.title = '双击编辑';
+
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'del';
+      del.dataset.action = 'delete';
+      del.setAttribute('aria-label', '删除任务');
+      del.textContent = '×';
+
+      li.append(check, text, del);
+      frag.appendChild(li);
+    });
+    list.appendChild(frag);
+
+    // 空状态
+    const msgs = {
+      all: '还没有任务，在上面输入一条开始吧',
+      active: '太棒了，没有未完成的任务 🎉',
+      done: '还没有完成的任务'
+    };
+    $('#empty-text').textContent = msgs[filter];
+    empty.hidden = visible.length !== 0;
+
+    // 底部统计
+    const activeCount = todos.filter((t) => !t.done).length;
+    const doneCount = todos.length - activeCount;
+    count.textContent = todos.length ? `还剩 ${activeCount} 项未完成` : '';
+    clearBtn.hidden = doneCount === 0;
+  }
+
+  /* ---------- 编辑 ---------- */
+  function startEdit(textEl) {
+    const li = textEl.closest('.item');
+    if (!li) return;
+    const todo = todos.find((x) => x.id === li.dataset.id);
+    if (!todo) return;
+
+    const input = document.createElement('input');
+    input.className = 'edit-input';
+    input.type = 'text';
+    input.maxLength = 200;
+    input.value = todo.text;
+
+    textEl.replaceWith(input);
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+
+    let finished = false;
+    function commit(cancel) {
+      if (finished) return;
+      finished = true;
+      const value = input.value.trim();
+      if (!cancel && value && value !== todo.text) {
+        todo.text = value;
+        save();
+      }
+      render();
+    }
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); commit(false); }
+      else if (e.key === 'Escape') { commit(true); }
+    });
+    input.addEventListener('blur', () => commit(false));
+  }
+
+  /* ---------- 事件绑定 ---------- */
+  $('#form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const input = $('#input');
+    const text = input.value.trim();
+    if (!text) return;
+    add(text);
+    input.value = '';
+    input.focus();
+  });
+
+  $('#list').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const li = btn.closest('.item');
+    if (!li) return;
+    const id = li.dataset.id;
+    if (btn.dataset.action === 'toggle') toggle(id);
+    else if (btn.dataset.action === 'delete') remove(id);
+  });
+
+  $('#list').addEventListener('dblclick', (e) => {
+    const textEl = e.target.closest('.text');
+    if (textEl) startEdit(textEl);
+  });
+
+  document.querySelectorAll('.filters button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      filter = btn.dataset.filter;
+      document.querySelectorAll('.filters button').forEach((b) => {
+        b.classList.toggle('active', b === btn);
+      });
+      render();
+    });
+  });
+
+  $('#clear').addEventListener('click', clearDone);
+
+  /* ---------- PWA：动态生成 manifest，可添加到主屏幕 ---------- */
+  (function setupManifest() {
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">' +
+        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">' +
+          '<stop offset="0" stop-color="#6c5ce7"/><stop offset="1" stop-color="#00d2ff"/>' +          '<stop offset="0" 停止颜色="#6c5ce7"/><停止偏移="1" 停止颜色="#00d2ff"/>' +
+        '</linearGradient></defs>' +
+        '<rect width="512" height="512" rx="112" fill="url(#g)"/>' +
+        '<path d="M156 268l68 68 132-140" fill="none" stroke="#fff" ' +        '<path d="M156 268l68 68 132-140" 填充="无" 描边="#fff" ' +
+          'stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '</svg>';
+    const icon = 'data:image/svg+xml,' + encodeURIComponent(svg);
+
+    const manifest = {
+      name: '待办清单',
+      short_name: '待办',
+      description: '一个轻量的本地待办清单',
+      start_url: '.',
+      scope: '.',
+      display: 'standalone',
+      background_color: '#0f1220',
+      theme_color: '#0f1220',
+      icons: [
+        { src: icon, sizes: 'any', type: 'image/svg+xml', purpose: 'any' },        { src: 图标，尺寸：'any', 类型：'image/svg+xml', 目的：'any' },        { src: 图标, 尺寸: 'any', 类型: 'image/svg+xml', 目的: 'any' }, { src: 图标，尺寸：'any', 类型：'image/svg+xml', 目的：'any' },
+        { src: icon, sizes: 'any', type: 'image/svg+xml', purpose: 'maskable' }        { src: 图标，尺寸：'any', 类型：'image/svg+xml', 目的：'maskable' }        { src: 图标，尺寸：'any', 类型：'image/svg+xml', 目的：'maskable' } { src: 图标，尺寸：'any', 类型：'image/svg+xml', 目的：'maskable' }
+      ]
+    };
+
+    try {
+      const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+      document.getElementById('manifest').href = URL.createObjectURL(blob);document.getElementById('manifest').href = URL.createObjectURL(blob);
+    } catch (e) {
+      /* 不支持就跳过，不影响正常使用 */
+    }
+  })();
+
+  /* ---------- 启动 ---------- */
+  render();
+})();
+</script>
+</body>
+</html>
